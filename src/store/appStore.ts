@@ -5,7 +5,7 @@ import {
   useStore,
   useVisibleTask$,
 } from '@builder.io/qwik';
-import type { Appointment, GlassesFrame, RepairRecord, RepairStatus, TryOnRecord } from '~/types';
+import type { Appointment, GlassesFrame, RepairRecord, RepairResult, RepairStatus, TryOnRecord } from '~/types';
 import {
   generateId,
   generateRepairNo,
@@ -217,7 +217,6 @@ export function handleInventoryStatusChange(
   const needTryOnRecord = oldStatus !== '试戴中' && newStatus === '试戴中';
   const wasTryOn = oldStatus === '试戴中' && newStatus !== '试戴中';
   const wasAppointment = oldStatus === '已预约' && newStatus !== '已预约';
-  const wasRepair = oldStatus === '维修中' && newStatus !== '维修中';
 
   if (wasTryOn) {
     const activeRecords = store.records.filter(
@@ -242,17 +241,6 @@ export function handleInventoryStatusChange(
     if (frame) {
       frame.appointmentInfo = undefined;
     }
-  }
-
-  if (wasRepair) {
-    const activeRepairs = store.repairs.filter(
-      (r) => r.frameId === frameId && r.status !== '已完成'
-    );
-    activeRepairs.forEach((repair) => {
-      repair.status = '已完成';
-      repair.actualDate = getToday();
-      repair.updatedAt = getNow();
-    });
   }
 
   return { needTryOnRecord };
@@ -490,7 +478,7 @@ export function isFrameInRepair(store: AppState, frameId: string): boolean {
 
 export function addRepairRecord(
   store: AppState,
-  data: Omit<RepairRecord, 'id' | 'repairNo' | 'createdAt' | 'updatedAt' | 'status'> & {
+  data: Omit<RepairRecord, 'id' | 'repairNo' | 'createdAt' | 'updatedAt' | 'status' | 'previousInventoryStatus'> & {
     status?: RepairStatus;
   }
 ): { success: boolean; error?: string } {
@@ -506,6 +494,7 @@ export function addRepairRecord(
     frameNo: frame.frameNo,
     frameName: frame.frameName,
     status: data.status || '待送修',
+    previousInventoryStatus: frame.inventoryStatus,
     createdAt: now,
     updatedAt: now,
   });
@@ -530,7 +519,8 @@ export function updateRepairRecord(
 export function updateRepairStatus(
   store: AppState,
   id: string,
-  newStatus: RepairStatus
+  newStatus: RepairStatus,
+  repairResult?: RepairResult
 ): { success: boolean; error?: string } {
   const repair = store.repairs.find((r) => r.id === id);
   if (!repair) return { success: false, error: '维修记录不存在' };
@@ -538,6 +528,21 @@ export function updateRepairStatus(
   repair.updatedAt = getNow();
   if (newStatus === '已完成') {
     repair.actualDate = getToday();
+    if (repairResult) {
+      repair.repairResult = repairResult;
+      const frame = store.frames.find((f) => f.id === repair.frameId);
+      if (frame) {
+        if (repairResult === '已修好') {
+          if (repair.previousInventoryStatus) {
+            frame.inventoryStatus = repair.previousInventoryStatus;
+          } else {
+            frame.inventoryStatus = '在库';
+          }
+        } else if (repairResult === '未修好') {
+          frame.inventoryStatus = '停用';
+        }
+      }
+    }
   }
   return { success: true };
 }
@@ -574,24 +579,7 @@ export function getFilteredRepairs(store: AppState): RepairRecord[] {
   });
 }
 
-export function syncFramesRepairStatus(store: AppState): void {
-  store.frames.forEach((frame) => {
-    const activeRepair = store.repairs.find(
-      (r) => r.frameId === frame.id && r.status !== '已完成'
-    );
-    if (activeRepair) {
-      if (
-        frame.inventoryStatus !== '试戴中' &&
-        frame.inventoryStatus !== '停用'
-      ) {
-        frame.inventoryStatus = '维修中';
-      }
-    } else {
-      if (frame.inventoryStatus === '维修中') {
-        frame.inventoryStatus = '在库';
-      }
-    }
-  });
+export function syncFramesRepairStatus(_store: AppState): void {
 }
 
 export function syncRepairFrameIds(store: AppState): void {

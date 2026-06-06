@@ -1,28 +1,50 @@
-import { component$, $, useSignal, useTask$ } from '@builder.io/qwik';
-import { useForm, zodForm$ } from '@modular-forms/qwik';
+import { component$, $, useSignal, useTask$, useComputed$ } from '@builder.io/qwik';
+import { useForm, zodForm$, useFormContext } from '@modular-forms/qwik';
 import { z } from 'zod';
 import type { AppState } from '~/store/appStore';
-import { addRepairRecord, updateRepairRecord } from '~/store/appStore';
-import { REPAIR_STATUS_LIST, REPAIR_TYPE_LIST } from '~/types';
+import { addRepairRecord, updateRepairRecord, updateRepairStatus } from '~/store/appStore';
+import { REPAIR_STATUS_LIST, REPAIR_TYPE_LIST, REPAIR_RESULT_LIST } from '~/types';
 import { getToday } from '~/utils/storage';
 
 interface RepairModalProps {
   store: AppState;
 }
 
-const repairSchema = z.object({
-  frameId: z.string().min(1, '请选择镜架'),
-  sendDate: z.string().min(1, '送修日期不能为空'),
-  expectedDate: z.string().optional(),
-  actualDate: z.string().optional(),
-  repairType: z.string().min(1, '维修类型不能为空'),
-  status: z.string().min(1, '处理状态不能为空'),
-  handler: z
-    .string()
-    .min(1, '经办人不能为空')
-    .refine((val) => val.trim().length > 0, '经办人不能为空'),
-  remark: z.string().optional(),
-});
+const repairSchema = z
+  .object({
+    frameId: z.string().min(1, '请选择镜架'),
+    sendDate: z.string().min(1, '送修日期不能为空'),
+    expectedDate: z.string().optional(),
+    actualDate: z.string().optional(),
+    repairType: z.string().min(1, '维修类型不能为空'),
+    status: z.string().min(1, '处理状态不能为空'),
+    handler: z
+      .string()
+      .min(1, '经办人不能为空')
+      .refine((val) => val.trim().length > 0, '经办人不能为空'),
+    remark: z.string().optional(),
+    repairResult: z.string().optional(),
+  })
+  .refine(
+    (data) => {
+      if (!data.expectedDate || !data.sendDate) return true;
+      return data.expectedDate >= data.sendDate;
+    },
+    {
+      message: '预计完成日期不能早于送修日期',
+      path: ['expectedDate'],
+    }
+  )
+  .refine(
+    (data) => {
+      if (data.status === '已完成' && !data.repairResult) return false;
+      return true;
+    },
+    {
+      message: '状态为已完成时必须选择维修结果',
+      path: ['repairResult'],
+    }
+  );
 
 type RepairFormValues = z.infer<typeof repairSchema>;
 
@@ -35,8 +57,9 @@ export default component$<RepairModalProps>(({ store }) => {
     (f) =>
       f.inventoryStatus === '在库' ||
       f.inventoryStatus === '待上架' ||
-      f.inventoryStatus === '维修中' ||
-      f.inventoryStatus === '停用'
+      f.inventoryStatus === '停用' ||
+      f.inventoryStatus === '已预约' ||
+      f.inventoryStatus === '试戴中'
   );
 
   const defaultFrameId = editing
@@ -57,6 +80,7 @@ export default component$<RepairModalProps>(({ store }) => {
             status: editing.status,
             handler: editing.handler,
             remark: editing.remark || '',
+            repairResult: editing.repairResult || '',
           }
         : {
             frameId: defaultFrameId,
@@ -67,11 +91,17 @@ export default component$<RepairModalProps>(({ store }) => {
             status: REPAIR_STATUS_LIST[0],
             handler: '',
             remark: '',
+            repairResult: '',
           },
     },
     validate: zodForm$(repairSchema),
     validateOn: 'submit',
     revalidateOn: 'input',
+  });
+
+  const formStore = useFormContext<RepairFormValues>();
+  const currentStatus = useComputed$(() => {
+    return formStore?.value?.status || editing?.status || '';
   });
 
   useTask$(({ track }) => {
@@ -97,13 +127,27 @@ export default component$<RepairModalProps>(({ store }) => {
       status: values.status as '待送修' | '维修中' | '待返库' | '已完成',
       handler: values.handler.trim(),
       remark: values.remark?.trim() || undefined,
+      repairResult: (values.repairResult as '已修好' | '未修好') || undefined,
     };
 
     let result;
     if (editing) {
+      const wasNotCompleted = editing.status !== '已完成';
+      const nowCompleted = values.status === '已完成';
+
       result = updateRepairRecord(store, editing.id, payload);
+
+      if (result.success && wasNotCompleted && nowCompleted && payload.repairResult) {
+        updateRepairStatus(store, editing.id, '已完成', payload.repairResult);
+      }
     } else {
       result = addRepairRecord(store, payload);
+      if (result.success && payload.status === '已完成' && payload.repairResult) {
+        const newRecord = store.repairs[store.repairs.length - 1];
+        if (newRecord) {
+          updateRepairStatus(store, newRecord.id, '已完成', payload.repairResult);
+        }
+      }
     }
 
     if (!result.success) {
@@ -168,7 +212,7 @@ export default component$<RepairModalProps>(({ store }) => {
                   <option value="">请选择镜架</option>
                   {availableFrames.map((frame) => (
                     <option key={frame.id} value={frame.id}>
-                      {frame.frameNo} - {frame.frameName}
+                      {frame.frameNo} - {frame.frameName}（{frame.inventoryStatus}）
                     </option>
                   ))}
                 </select>
@@ -244,6 +288,25 @@ export default component$<RepairModalProps>(({ store }) => {
               )}
             </Field>
           </div>
+
+          {currentStatus.value === '已完成' && (
+            <Field name="repairResult">
+              {(field, props) => (
+                <div>
+                  <label class="label">维修结果 *</label>
+                  <select {...props} value={field.value} class="input">
+                    <option value="">请选择维修结果</option>
+                    {REPAIR_RESULT_LIST.map((r) => (
+                      <option key={r} value={r}>
+                        {r}
+                      </option>
+                    ))}
+                  </select>
+                  {field.error && <p class="mt-1 text-sm text-red-600">{field.error}</p>}
+                </div>
+              )}
+            </Field>
+          )}
 
           <Field name="handler">
             {(field, props) => (

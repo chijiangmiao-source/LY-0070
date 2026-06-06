@@ -9,6 +9,8 @@ import {
   REPAIR_STATUS_LIST,
   REPAIR_STATUS_COLORS,
   REPAIR_TYPE_COLORS,
+  REPAIR_RESULT_COLORS,
+  INVENTORY_STATUS_COLORS,
 } from '~/types';
 
 interface RepairListProps {
@@ -23,12 +25,16 @@ export default component$<RepairListProps>(({ store }) => {
 
   const getNextStatuses = (current: string): string[] => {
     const flow: Record<string, string[]> = {
-      待送修: ['维修中', '已完成'],
-      维修中: ['待返库', '已完成'],
-      待返库: ['已完成'],
+      待送修: ['维修中'],
+      维修中: ['待返库'],
+      待返库: [],
       已完成: [],
     };
     return flow[current] || [];
+  };
+
+  const canComplete = (current: string): boolean => {
+    return ['待送修', '维修中', '待返库'].includes(current);
   };
 
   return (
@@ -149,7 +155,13 @@ export default component$<RepairListProps>(({ store }) => {
                   维修类型
                 </th>
                 <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  维修前状态
+                </th>
+                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   状态
+                </th>
+                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  维修结果
                 </th>
                 <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   经办人
@@ -165,7 +177,7 @@ export default component$<RepairListProps>(({ store }) => {
             <tbody class="bg-white divide-y divide-gray-200">
               {sortedRepairs.length === 0 && (
                 <tr>
-                  <td colSpan={11} class="px-4 py-8 text-center text-gray-500">
+                  <td colSpan={13} class="px-4 py-8 text-center text-gray-500">
                     暂无维修记录
                   </td>
                 </tr>
@@ -197,9 +209,32 @@ export default component$<RepairListProps>(({ store }) => {
                       </span>
                     </td>
                     <td class="table-cell">
+                      {repair.previousInventoryStatus ? (
+                        <span
+                          class={`badge ${
+                            INVENTORY_STATUS_COLORS[repair.previousInventoryStatus] ||
+                            'bg-gray-100 text-gray-800'
+                          }`}
+                        >
+                          {repair.previousInventoryStatus}
+                        </span>
+                      ) : (
+                        <span class="text-gray-400">-</span>
+                      )}
+                    </td>
+                    <td class="table-cell">
                       <span class={`badge ${REPAIR_STATUS_COLORS[repair.status]}`}>
                         {repair.status}
                       </span>
+                    </td>
+                    <td class="table-cell">
+                      {repair.repairResult ? (
+                        <span class={`badge ${REPAIR_RESULT_COLORS[repair.repairResult]}`}>
+                          {repair.repairResult}
+                        </span>
+                      ) : (
+                        <span class="text-gray-400">-</span>
+                      )}
                     </td>
                     <td class="table-cell">{repair.handler}</td>
                     <td class="table-cell text-gray-500 max-w-xs truncate">
@@ -210,20 +245,34 @@ export default component$<RepairListProps>(({ store }) => {
                         {nextStatuses.map((ns) => (
                           <button
                             key={ns}
-                            class={`text-xs py-1 px-3 ${
-                              ns === '已完成' ? 'btn-success' : 'btn-primary'
-                            }`}
+                            class="btn-primary text-xs py-1 px-3"
                             onClick$={() => {
                               updateRepairStatus(store, repair.id, ns as any);
                             }}
                           >
-                            {ns === '维修中'
-                              ? '送修'
-                              : ns === '待返库'
-                              ? '待返库'
-                              : ns}
+                            {ns === '维修中' ? '送修' : ns === '待返库' ? '待返库' : ns}
                           </button>
                         ))}
+                        {canComplete(repair.status) && (
+                          <>
+                            <button
+                              class="btn-success text-xs py-1 px-3"
+                              onClick$={() => {
+                                updateRepairStatus(store, repair.id, '已完成', '已修好');
+                              }}
+                            >
+                              完成(已修好)
+                            </button>
+                            <button
+                              class="btn-danger text-xs py-1 px-3"
+                              onClick$={() => {
+                                updateRepairStatus(store, repair.id, '已完成', '未修好');
+                              }}
+                            >
+                              完成(未修好)
+                            </button>
+                          </>
+                        )}
                         {repair.status !== '已完成' && (
                           <button
                             class="btn-warning text-xs py-1 px-3"
