@@ -1,12 +1,18 @@
 import { component$ } from '@builder.io/qwik';
 import type { AppState } from '~/store/appStore';
-import { getFilteredFrames, isFrameBooked } from '~/store/appStore';
+import { getFilteredFrames, getFrameAppointmentDisplay } from '~/store/appStore';
 import {
   FRAME_TYPES,
   INVENTORY_STATUS_LIST,
   INVENTORY_STATUS_COLORS,
   TRY_ON_STATUS_COLORS,
 } from '~/types';
+
+const APPOINTMENT_DISPLAY_COLORS: Record<string, string> = {
+  无预约: 'bg-gray-100 text-gray-600',
+  已预约: 'bg-orange-100 text-orange-800',
+  今日待到店: 'bg-pink-100 text-pink-800',
+};
 
 interface FrameListProps {
   store: AppState;
@@ -94,6 +100,9 @@ export default component$<FrameListProps>(({ store }) => {
                 <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   库存状态
                 </th>
+                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  预约状态
+                </th>
                 <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                   操作
                 </th>
@@ -102,20 +111,22 @@ export default component$<FrameListProps>(({ store }) => {
             <tbody class="bg-white divide-y divide-gray-200">
               {filteredFrames.length === 0 && (
                 <tr>
-                  <td colSpan={8} class="px-4 py-8 text-center text-gray-500">
+                  <td colSpan={9} class="px-4 py-8 text-center text-gray-500">
                     暂无镜架数据
                   </td>
                 </tr>
               )}
               {filteredFrames.map((frame) => {
-                const bookedApt = isFrameBooked(store, frame.id);
+                const aptDisplay = getFrameAppointmentDisplay(frame);
                 return (
                   <tr
                     key={frame.id}
                     class={
                       frame.inventoryStatus === '待上架'
                         ? 'pending-highlight bg-yellow-50'
-                        : bookedApt
+                        : aptDisplay.status === '今日待到店'
+                        ? 'bg-pink-50'
+                        : aptDisplay.status === '已预约'
                         ? 'bg-orange-50'
                         : 'hover:bg-gray-50'
                     }
@@ -125,11 +136,6 @@ export default component$<FrameListProps>(({ store }) => {
                       <div class="flex items-center gap-2 flex-wrap">
                         {frame.inventoryStatus === '待上架' && (
                           <span class="badge bg-yellow-400 text-yellow-900 animate-pulse">待上架</span>
-                        )}
-                        {bookedApt && (
-                          <span class="badge bg-orange-400 text-orange-900">
-                            已预约 {bookedApt.appointmentDate} {bookedApt.appointmentTime}
-                          </span>
                         )}
                         <span>{frame.frameName}</span>
                       </div>
@@ -147,6 +153,11 @@ export default component$<FrameListProps>(({ store }) => {
                         {frame.inventoryStatus}
                       </span>
                     </td>
+                    <td class="table-cell">
+                      <span class={`badge ${APPOINTMENT_DISPLAY_COLORS[aptDisplay.status]}`}>
+                        {aptDisplay.label}
+                      </span>
+                    </td>
                     <td class="table-cell text-right whitespace-nowrap">
                       <div class="flex justify-end gap-2 flex-wrap">
                         <button
@@ -158,7 +169,9 @@ export default component$<FrameListProps>(({ store }) => {
                         >
                           编辑
                         </button>
-                        {(frame.inventoryStatus === '在库' || frame.inventoryStatus === '待上架') && (
+                        {(frame.inventoryStatus === '在库' ||
+                          frame.inventoryStatus === '待上架' ||
+                          frame.inventoryStatus === '已预约') && (
                           <button
                             class="btn-warning text-xs py-1 px-3"
                             onClick$={() => {

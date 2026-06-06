@@ -3,6 +3,7 @@ import type { Appointment, GlassesFrame, TryOnRecord } from '~/types';
 const FRAMES_KEY = 'glasses_frames';
 const RECORDS_KEY = 'try_on_records';
 const APPOINTMENTS_KEY = 'appointments';
+const INITIALIZED_KEY = 'storage_initialized';
 
 export function generateId(): string {
   return Date.now().toString(36) + Math.random().toString(36).substr(2, 9);
@@ -17,18 +18,31 @@ export function getNow(): string {
   return new Date().toISOString();
 }
 
+function isFirstLoad(): boolean {
+  if (typeof window === 'undefined') return true;
+  return localStorage.getItem(INITIALIZED_KEY) !== '1';
+}
+
+function markInitialized(): void {
+  if (typeof window === 'undefined') return;
+  localStorage.setItem(INITIALIZED_KEY, '1');
+}
+
 export function loadFrames(): GlassesFrame[] {
   if (typeof window === 'undefined') return [];
   try {
     const data = localStorage.getItem(FRAMES_KEY);
-    return data ? JSON.parse(data) : getDefaultFrames();
+    if (data) return JSON.parse(data);
+    if (isFirstLoad()) return getDefaultFrames();
+    return [];
   } catch {
-    return getDefaultFrames();
+    return isFirstLoad() ? getDefaultFrames() : [];
   }
 }
 
 export function saveFrames(frames: GlassesFrame[]): void {
   if (typeof window === 'undefined') return;
+  markInitialized();
   localStorage.setItem(FRAMES_KEY, JSON.stringify(frames));
 }
 
@@ -36,14 +50,17 @@ export function loadRecords(): TryOnRecord[] {
   if (typeof window === 'undefined') return [];
   try {
     const data = localStorage.getItem(RECORDS_KEY);
-    return data ? JSON.parse(data) : getDefaultRecords();
+    if (data) return JSON.parse(data);
+    if (isFirstLoad()) return getDefaultRecords();
+    return [];
   } catch {
-    return getDefaultRecords();
+    return isFirstLoad() ? getDefaultRecords() : [];
   }
 }
 
 export function saveRecords(records: TryOnRecord[]): void {
   if (typeof window === 'undefined') return;
+  markInitialized();
   localStorage.setItem(RECORDS_KEY, JSON.stringify(records));
 }
 
@@ -150,25 +167,31 @@ export function loadAppointments(): Appointment[] {
   if (typeof window === 'undefined') return [];
   try {
     const data = localStorage.getItem(APPOINTMENTS_KEY);
-    return data ? JSON.parse(data) : getDefaultAppointments();
+    if (data) return JSON.parse(data);
+    if (isFirstLoad()) return getDefaultAppointments();
+    return [];
   } catch {
-    return getDefaultAppointments();
+    return isFirstLoad() ? getDefaultAppointments() : [];
   }
 }
 
 export function saveAppointments(appointments: Appointment[]): void {
   if (typeof window === 'undefined') return;
+  markInitialized();
   localStorage.setItem(APPOINTMENTS_KEY, JSON.stringify(appointments));
 }
 
 function getDefaultAppointments(): Appointment[] {
+  const frames = getDefaultFrames();
+  const f001 = frames.find((f) => f.frameNo === 'F001');
+  const f004 = frames.find((f) => f.frameNo === 'F004');
   const now = getNow();
   const today = getToday();
   const tomorrow = new Date(Date.now() + 86400000).toISOString().split('T')[0];
   return [
     {
       id: generateId(),
-      frameId: '',
+      frameId: f001?.id || '',
       frameNo: 'F001',
       frameName: '经典商务全框镜架',
       customerName: '王五',
@@ -183,7 +206,7 @@ function getDefaultAppointments(): Appointment[] {
     },
     {
       id: generateId(),
-      frameId: '',
+      frameId: f004?.id || '',
       frameNo: 'F004',
       frameName: '复古圆框眼镜',
       customerName: '赵六',

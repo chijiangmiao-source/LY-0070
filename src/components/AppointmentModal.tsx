@@ -42,7 +42,10 @@ export default component$<AppointmentModalProps>(({ store }) => {
   const preselectedFrameId = store.selectedFrameId;
 
   const availableFrames = store.frames.filter(
-    (f) => f.inventoryStatus === '在库' || f.inventoryStatus === '待上架'
+    (f) =>
+      f.inventoryStatus === '在库' ||
+      f.inventoryStatus === '待上架' ||
+      f.inventoryStatus === '已预约'
   );
 
   const defaultFrameId = editing

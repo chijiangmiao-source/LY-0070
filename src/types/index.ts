@@ -1,4 +1,4 @@
-export type InventoryStatus = '在库' | '试戴中' | '待上架' | '停用';
+export type InventoryStatus = '在库' | '试戴中' | '待上架' | '停用' | '已预约';
 
 export type TryOnStatus = '空闲' | '试戴中';
 
@@ -11,6 +11,11 @@ export interface GlassesFrame {
   location: string;
   tryOnStatus: TryOnStatus;
   inventoryStatus: InventoryStatus;
+  appointmentInfo?: {
+    date: string;
+    time: string;
+    customerName: string;
+  };
   createdAt: string;
   updatedAt: string;
 }
@@ -45,6 +50,7 @@ export const INVENTORY_STATUS_LIST: InventoryStatus[] = [
   '试戴中',
   '待上架',
   '停用',
+  '已预约',
 ];
 
 export const TRY_ON_STATUS_LIST: TryOnStatus[] = ['空闲', '试戴中'];
@@ -54,6 +60,7 @@ export const INVENTORY_STATUS_COLORS: Record<InventoryStatus, string> = {
   试戴中: 'bg-blue-100 text-blue-800',
   待上架: 'bg-yellow-100 text-yellow-800',
   停用: 'bg-gray-100 text-gray-800',
+  已预约: 'bg-orange-100 text-orange-800',
 };
 
 export const TRY_ON_STATUS_COLORS: Record<TryOnStatus, string> = {

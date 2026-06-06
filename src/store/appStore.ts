@@ -77,27 +77,24 @@ export function createAppStore(): AppState {
     store.frames = loadFrames();
     store.records = loadRecords();
     store.appointments = loadAppointments();
+    syncAppointmentFrameIds(store);
+    syncFramesAppointmentStatus(store);
   });
 
   useVisibleTask$(({ track }) => {
     track(() => store.frames);
-    if (store.frames.length > 0) {
-      saveFrames(store.frames);
-    }
+    saveFrames(store.frames);
   });
 
   useVisibleTask$(({ track }) => {
     track(() => store.records);
-    if (store.records.length > 0) {
-      saveRecords(store.records);
-    }
+    saveRecords(store.records);
   });
 
   useVisibleTask$(({ track }) => {
     track(() => store.appointments);
-    if (store.appointments.length > 0) {
-      saveAppointments(store.appointments);
-    }
+    saveAppointments(store.appointments);
+    syncFramesAppointmentStatus(store);
   });
 
   useContextProvider(AppContext, store);
@@ -187,6 +184,7 @@ export function handleInventoryStatusChange(
 ): { needTryOnRecord: boolean } {
   const needTryOnRecord = oldStatus !== '试戴中' && newStatus === '试戴中';
   const wasTryOn = oldStatus === '试戴中' && newStatus !== '试戴中';
+  const wasAppointment = oldStatus === '已预约' && newStatus !== '已预约';
 
   if (wasTryOn) {
     const activeRecords = store.records.filter(
@@ -197,6 +195,20 @@ export function handleInventoryStatusChange(
       record.returnDate = today;
       record.status = '已归还';
     });
+  }
+
+  if (wasAppointment) {
+    const activeAppointments = store.appointments.filter(
+      (a) => a.frameId === frameId && a.status === '预约中'
+    );
+    activeAppointments.forEach((apt) => {
+      apt.status = '已取消';
+      apt.updatedAt = getNow();
+    });
+    const frame = store.frames.find((f) => f.id === frameId);
+    if (frame) {
+      frame.appointmentInfo = undefined;
+    }
   }
 
   return { needTryOnRecord };
@@ -324,4 +336,75 @@ export function isFrameBooked(store: AppState, frameId: string): Appointment | u
   return store.appointments.find(
     (a) => a.frameId === frameId && a.status === '预约中'
   );
+}
+
+export function syncFramesAppointmentStatus(store: AppState): void {
+  const today = getToday();
+  store.frames.forEach((frame) => {
+    const activeApt = store.appointments.find(
+      (a) => a.frameId === frame.id && a.status === '预约中'
+    );
+    if (activeApt) {
+      if (frame.inventoryStatus !== '试戴中' && frame.inventoryStatus !== '停用') {
+        frame.inventoryStatus = '已预约';
+      }
+      frame.appointmentInfo = {
+        date: activeApt.appointmentDate,
+        time: activeApt.appointmentTime,
+        customerName: activeApt.customerName,
+      };
+    } else {
+      if (frame.inventoryStatus === '已预约') {
+        frame.inventoryStatus = '在库';
+      }
+      frame.appointmentInfo = undefined;
+    }
+  });
+}
+
+export interface FrameAppointmentDisplay {
+  status: '无预约' | '已预约' | '今日待到店';
+  label: string;
+  date?: string;
+  time?: string;
+  customerName?: string;
+}
+
+export function getFrameAppointmentDisplay(frame: GlassesFrame): FrameAppointmentDisplay {
+  if (!frame.appointmentInfo) {
+    return { status: '无预约', label: '无预约' };
+  }
+  const today = getToday();
+  const isToday = frame.appointmentInfo.date === today;
+  if (isToday) {
+    return {
+      status: '今日待到店',
+      label: `今日待到店（${frame.appointmentInfo.time}）`,
+      ...frame.appointmentInfo,
+    };
+  }
+  return {
+    status: '已预约',
+    label: `已预约（${frame.appointmentInfo.date} ${frame.appointmentInfo.time}）`,
+    ...frame.appointmentInfo,
+  };
+}
+
+export function syncAppointmentFrameIds(store: AppState): void {
+  store.appointments.forEach((apt) => {
+    if (!apt.frameId) {
+      const matched = store.frames.find((f) => f.frameNo === apt.frameNo);
+      if (matched) {
+        apt.frameId = matched.id;
+      }
+    } else {
+      const matched = store.frames.find((f) => f.id === apt.frameId);
+      if (!matched) {
+        const byNo = store.frames.find((f) => f.frameNo === apt.frameNo);
+        if (byNo) {
+          apt.frameId = byNo.id;
+        }
+      }
+    }
+  });
 }
