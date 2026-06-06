@@ -5,17 +5,31 @@ import {
   useStore,
   useVisibleTask$,
 } from '@builder.io/qwik';
-import type { Appointment, GlassesFrame, RepairRecord, RepairResult, RepairStatus, TryOnRecord } from '~/types';
+import type {
+  Appointment,
+  CustomerSummary,
+  FollowUpRecord,
+  FollowUpSourceType,
+  FollowUpStatus,
+  GlassesFrame,
+  IntentionLevel,
+  RepairRecord,
+  RepairResult,
+  RepairStatus,
+  TryOnRecord,
+} from '~/types';
 import {
   generateId,
   generateRepairNo,
   getNow,
   getToday,
   loadAppointments,
+  loadFollowUps,
   loadFrames,
   loadRecords,
   loadRepairs,
   saveAppointments,
+  saveFollowUps,
   saveFrames,
   saveRecords,
   saveRepairs,
@@ -26,23 +40,30 @@ export interface AppState {
   records: TryOnRecord[];
   appointments: Appointment[];
   repairs: RepairRecord[];
+  followUps: FollowUpRecord[];
   searchKeyword: string;
   filterType: string;
   filterInventory: string;
-  activeTab: 'frames' | 'records' | 'stats' | 'appointments' | 'repairs';
+  activeTab: 'frames' | 'records' | 'stats' | 'appointments' | 'repairs' | 'customers';
   editingFrame: GlassesFrame | null;
   showFrameModal: boolean;
   showTryOnModal: boolean;
   showReturnModal: boolean;
   showAppointmentModal: boolean;
   showRepairModal: boolean;
+  showFollowUpModal: boolean;
   selectedFrameId: string | null;
   selectedRecordId: string | null;
   selectedAppointmentId: string | null;
   selectedRepairId: string | null;
+  selectedFollowUpId: string | null;
   pendingTryOnAfterEdit: boolean;
   editingAppointment: Appointment | null;
   editingRepair: RepairRecord | null;
+  editingFollowUp: FollowUpRecord | null;
+  followUpSourceType: FollowUpSourceType | null;
+  followUpSourceId: string | null;
+  followUpSourceCustomerName: string | null;
   appointmentSearchKeyword: string;
   appointmentFilterDate: string;
   appointmentFilterFrameNo: string;
@@ -53,6 +74,11 @@ export interface AppState {
   repairFilterFrameNo: string;
   repairFilterStatus: string;
   repairFilterHandler: string;
+  customerSearchKeyword: string;
+  customerFilterIntention: string;
+  customerFilterStatus: string;
+  customerFilterDateFrom: string;
+  customerFilterDateTo: string;
 }
 
 export const AppContext = createContextId<AppState>('app-context');
@@ -67,6 +93,7 @@ export function createAppStore(): AppState {
     records: [],
     appointments: [],
     repairs: [],
+    followUps: [],
     searchKeyword: '',
     filterType: '',
     filterInventory: '',
@@ -77,13 +104,19 @@ export function createAppStore(): AppState {
     showReturnModal: false,
     showAppointmentModal: false,
     showRepairModal: false,
+    showFollowUpModal: false,
     selectedFrameId: null,
     selectedRecordId: null,
     selectedAppointmentId: null,
     selectedRepairId: null,
+    selectedFollowUpId: null,
     pendingTryOnAfterEdit: false,
     editingAppointment: null,
     editingRepair: null,
+    editingFollowUp: null,
+    followUpSourceType: null,
+    followUpSourceId: null,
+    followUpSourceCustomerName: null,
     appointmentSearchKeyword: '',
     appointmentFilterDate: '',
     appointmentFilterFrameNo: '',
@@ -94,6 +127,11 @@ export function createAppStore(): AppState {
     repairFilterFrameNo: '',
     repairFilterStatus: '',
     repairFilterHandler: '',
+    customerSearchKeyword: '',
+    customerFilterIntention: '',
+    customerFilterStatus: '',
+    customerFilterDateFrom: '',
+    customerFilterDateTo: '',
   });
 
   useVisibleTask$(() => {
@@ -101,6 +139,7 @@ export function createAppStore(): AppState {
     store.records = loadRecords();
     store.appointments = loadAppointments();
     store.repairs = loadRepairs();
+    store.followUps = loadFollowUps();
     syncAppointmentFrameIds(store);
     syncFramesAppointmentStatus(store);
     syncFramesRepairStatus(store);
@@ -127,6 +166,11 @@ export function createAppStore(): AppState {
     track(() => store.repairs);
     saveRepairs(store.repairs);
     syncFramesRepairStatus(store);
+  });
+
+  useVisibleTask$(({ track }) => {
+    track(() => store.followUps);
+    saveFollowUps(store.followUps);
   });
 
   useContextProvider(AppContext, store);
@@ -246,6 +290,96 @@ export function handleInventoryStatusChange(
   return { needTryOnRecord };
 }
 
+function determineCustomerFollowUpStatus(
+  customerFollowUps: FollowUpRecord[],
+  nextDate?: string
+): FollowUpStatus {
+  if (customerFollowUps.some((f) => f.isDealt)) {
+    return '已成交';
+  }
+  const today = getToday();
+  if (nextDate && nextDate < today) {
+    return '已流失';
+  }
+  if (customerFollowUps.length === 0) {
+    return '待回访';
+  }
+  const lastFollowUp = [...customerFollowUps].sort(
+    (a, b) => new Date(b.followUpDate).getTime() - new Date(a.followUpDate).getTime()
+  )[0];
+  if (!lastFollowUp.isDealt && lastFollowUp.feedback && lastFollowUp.nextFollowUpDate) {
+    return '跟进中';
+  }
+  if (!lastFollowUp.feedback) {
+    return '待回访';
+  }
+  return '跟进中';
+}
+
+function getLatestIntentionLevel(customerFollowUps: FollowUpRecord[]): IntentionLevel | undefined {
+  if (customerFollowUps.length === 0) return undefined;
+  const sorted = [...customerFollowUps].sort(
+    (a, b) => new Date(b.followUpDate).getTime() - new Date(a.followUpDate).getTime()
+  );
+  return sorted[0].intentionLevel;
+}
+
+export function getCustomerSummaries(store: AppState): CustomerSummary[] {
+  const customerMap = new Map<string, CustomerSummary>();
+  const allCustomerNames = new Set<string>();
+
+  store.records.forEach((r) => allCustomerNames.add(r.customerName));
+  store.appointments.forEach((a) => allCustomerNames.add(a.customerName));
+  store.repairs.forEach((r) => {
+    const customerApts = store.appointments.filter((a) => a.frameId === r.frameId);
+    const customerRecords = store.records.filter((rec) => rec.frameId === r.frameId);
+    customerApts.forEach((a) => allCustomerNames.add(a.customerName));
+    customerRecords.forEach((rec) => allCustomerNames.add(rec.customerName));
+  });
+  store.followUps.forEach((f) => allCustomerNames.add(f.customerName));
+
+  allCustomerNames.forEach((name) => {
+    const customerFollowUps = store.followUps.filter((f) => f.customerName === name);
+    const sortedFollowUps = [...customerFollowUps].sort(
+      (a, b) => new Date(b.followUpDate).getTime() - new Date(a.followUpDate).getTime()
+    );
+    const lastFollowUp = sortedFollowUps[0];
+    const nextFollowUpDate = lastFollowUp?.nextFollowUpDate;
+    const lastFollowUpDate = lastFollowUp?.followUpDate;
+
+    customerMap.set(name, {
+      customerName: name,
+      followUpStatus: determineCustomerFollowUpStatus(customerFollowUps, nextFollowUpDate),
+      intentionLevel: getLatestIntentionLevel(customerFollowUps),
+      lastFollowUpDate,
+      nextFollowUpDate,
+      tryOnRecords: store.records.filter((r) => r.customerName === name),
+      appointments: store.appointments.filter((a) => a.customerName === name),
+      repairs: store.repairs.filter((r) => {
+        const frameCustomerNames = new Set<string>();
+        store.appointments
+          .filter((a) => a.frameId === r.frameId)
+          .forEach((a) => frameCustomerNames.add(a.customerName));
+        store.records
+          .filter((rec) => rec.frameId === r.frameId)
+          .forEach((rec) => frameCustomerNames.add(rec.customerName));
+        return frameCustomerNames.has(name);
+      }),
+      followUpRecords: sortedFollowUps,
+    });
+  });
+
+  return Array.from(customerMap.values()).sort((a, b) => {
+    const statusOrder: Record<FollowUpStatus, number> = {
+      待回访: 0,
+      跟进中: 1,
+      已成交: 2,
+      已流失: 3,
+    };
+    return statusOrder[a.followUpStatus] - statusOrder[b.followUpStatus];
+  });
+}
+
 export function getStats(store: AppState) {
   const total = store.frames.length;
   const inStock = store.frames.filter((f) => f.inventoryStatus === '在库').length;
@@ -264,6 +398,19 @@ export function getStats(store: AppState) {
   const pendingReturn = store.repairs.filter((r) => r.status === '待返库').length;
   const thisMonth = new Date().toISOString().slice(0, 7);
   const thisMonthRepairs = store.repairs.filter((r) => r.sendDate.startsWith(thisMonth)).length;
+
+  const customers = getCustomerSummaries(store);
+  const pendingFollowUpCount = customers.filter((c) => c.followUpStatus === '待回访').length;
+  const dealtCount = customers.filter((c) => c.followUpStatus === '已成交').length;
+  const dealtCustomers = store.followUps.filter((f) => f.isDealt);
+  const totalDealAmount = dealtCustomers.reduce((sum, f) => sum + (f.dealAmount || 0), 0);
+  const thisMonthFollowUps = store.followUps.filter((f) => f.followUpDate.startsWith(thisMonth));
+  const thisMonthTotal = new Set(thisMonthFollowUps.map((f) => f.customerName)).size;
+  const thisMonthDealt = new Set(
+    thisMonthFollowUps.filter((f) => f.isDealt).map((f) => f.customerName)
+  ).size;
+  const thisMonthConversionRate = thisMonthTotal > 0 ? (thisMonthDealt / thisMonthTotal) * 100 : 0;
+
   return {
     total,
     inStock,
@@ -279,6 +426,12 @@ export function getStats(store: AppState) {
     inRepair,
     pendingReturn,
     thisMonthRepairs,
+    pendingFollowUpCount,
+    dealtCount,
+    totalDealAmount,
+    thisMonthConversionRate,
+    thisMonthTotal,
+    thisMonthDealt,
   };
 }
 
@@ -598,5 +751,67 @@ export function syncRepairFrameIds(store: AppState): void {
         }
       }
     }
+  });
+}
+
+export function addFollowUpRecord(
+  store: AppState,
+  data: Omit<FollowUpRecord, 'id' | 'createdAt' | 'updatedAt'>
+): { success: boolean; error?: string } {
+  const now = getNow();
+  store.followUps.push({
+    ...data,
+    id: generateId(),
+    createdAt: now,
+    updatedAt: now,
+  });
+  return { success: true };
+}
+
+export function updateFollowUpRecord(
+  store: AppState,
+  id: string,
+  updates: Partial<Omit<FollowUpRecord, 'id' | 'createdAt'>>
+): { success: boolean; error?: string } {
+  const index = store.followUps.findIndex((f) => f.id === id);
+  if (index === -1) return { success: false, error: '回访记录不存在' };
+  store.followUps[index] = {
+    ...store.followUps[index],
+    ...updates,
+    updatedAt: getNow(),
+  };
+  return { success: true };
+}
+
+export function deleteFollowUpRecord(store: AppState, id: string): void {
+  store.followUps = store.followUps.filter((f) => f.id !== id);
+}
+
+export function getFollowUpsBySource(
+  store: AppState,
+  sourceType: FollowUpSourceType,
+  sourceId: string
+): FollowUpRecord[] {
+  return store.followUps
+    .filter((f) => f.sourceType === sourceType && f.sourceId === sourceId)
+    .sort((a, b) => new Date(b.followUpDate).getTime() - new Date(a.followUpDate).getTime());
+}
+
+export function getFilteredCustomers(store: AppState): CustomerSummary[] {
+  const summaries = getCustomerSummaries(store);
+  return summaries.filter((c) => {
+    const matchKeyword =
+      !store.customerSearchKeyword ||
+      c.customerName.toLowerCase().includes(store.customerSearchKeyword.toLowerCase());
+    const matchIntention =
+      !store.customerFilterIntention || c.intentionLevel === store.customerFilterIntention;
+    const matchStatus = !store.customerFilterStatus || c.followUpStatus === store.customerFilterStatus;
+    const matchDateFrom =
+      !store.customerFilterDateFrom ||
+      (c.lastFollowUpDate && c.lastFollowUpDate >= store.customerFilterDateFrom);
+    const matchDateTo =
+      !store.customerFilterDateTo ||
+      (c.lastFollowUpDate && c.lastFollowUpDate <= store.customerFilterDateTo);
+    return matchKeyword && matchIntention && matchStatus && matchDateFrom && matchDateTo;
   });
 }

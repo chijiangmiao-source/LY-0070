@@ -82,10 +82,42 @@ export default component$<StatsOverviewProps>(({ store }) => {
       icon: '📊',
       iconColor: 'text-rose-600',
     },
+    {
+      label: '待回访人数',
+      value: stats.pendingFollowUpCount,
+      gradient: 'from-amber-500 to-amber-600',
+      iconBg: 'bg-amber-100',
+      icon: '📞',
+      iconColor: 'text-amber-600',
+    },
+    {
+      label: '成交人数',
+      value: stats.dealtCount,
+      gradient: 'from-emerald-500 to-emerald-600',
+      iconBg: 'bg-emerald-100',
+      icon: '🎉',
+      iconColor: 'text-emerald-600',
+    },
+    {
+      label: '成交金额',
+      value: `¥${stats.totalDealAmount.toLocaleString()}`,
+      gradient: 'from-teal-500 to-teal-600',
+      iconBg: 'bg-teal-100',
+      icon: '💰',
+      iconColor: 'text-teal-600',
+    },
+    {
+      label: '本月转化率',
+      value: `${stats.thisMonthConversionRate.toFixed(1)}%`,
+      gradient: 'from-fuchsia-500 to-fuchsia-600',
+      iconBg: 'bg-fuchsia-100',
+      icon: '📈',
+      iconColor: 'text-fuchsia-600',
+    },
   ];
 
   return (
-    <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 xl:grid-cols-9 gap-5">
+    <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-7 2xl:grid-cols-13 gap-5">
       {statCards.map((card) => (
         <div
           key={card.label}

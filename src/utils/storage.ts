@@ -1,9 +1,16 @@
-import type { Appointment, GlassesFrame, RepairRecord, TryOnRecord } from '~/types';
+import type {
+  Appointment,
+  FollowUpRecord,
+  GlassesFrame,
+  RepairRecord,
+  TryOnRecord,
+} from '~/types';
 
 const FRAMES_KEY = 'glasses_frames';
 const RECORDS_KEY = 'try_on_records';
 const APPOINTMENTS_KEY = 'appointments';
 const REPAIRS_KEY = 'repair_records';
+const FOLLOW_UPS_KEY = 'follow_up_records';
 const INITIALIZED_KEY = 'storage_initialized';
 
 export function generateId(): string {
@@ -285,6 +292,82 @@ function getDefaultRepairs(): RepairRecord[] {
       handler: '王顾问',
       remark: '定期保养清洁，更换鼻托',
       previousInventoryStatus: '停用',
+      createdAt: now,
+      updatedAt: now,
+    },
+  ];
+}
+
+export function loadFollowUps(): FollowUpRecord[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const data = localStorage.getItem(FOLLOW_UPS_KEY);
+    if (data) return JSON.parse(data);
+    if (isFirstLoad()) return getDefaultFollowUps();
+    return [];
+  } catch {
+    return isFirstLoad() ? getDefaultFollowUps() : [];
+  }
+}
+
+export function saveFollowUps(followUps: FollowUpRecord[]): void {
+  if (typeof window === 'undefined') return;
+  markInitialized();
+  localStorage.setItem(FOLLOW_UPS_KEY, JSON.stringify(followUps));
+}
+
+function getDefaultFollowUps(): FollowUpRecord[] {
+  const records = getDefaultRecords();
+  const appointments = getDefaultAppointments();
+  const now = getNow();
+  const today = getToday();
+  const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
+  const dayAfterTomorrow = new Date(Date.now() + 2 * 86400000).toISOString().split('T')[0];
+
+  return [
+    {
+      id: generateId(),
+      customerName: '张三',
+      sourceType: '试戴记录',
+      sourceId: records[0]?.id || '',
+      followUpDate: yesterday,
+      followUpMethod: '电话',
+      feedback: '客户对款式比较满意，但是价格偏高，需要和家人商量',
+      intentionLevel: '中意向',
+      isDealt: false,
+      noDealReason: '',
+      nextFollowUpDate: dayAfterTomorrow,
+      handler: '李经理',
+      createdAt: now,
+      updatedAt: now,
+    },
+    {
+      id: generateId(),
+      customerName: '李四',
+      sourceType: '试戴记录',
+      sourceId: records[1]?.id || '',
+      followUpDate: today,
+      followUpMethod: '微信',
+      feedback: '客户已确认购买同款，已经下单',
+      intentionLevel: '高意向',
+      isDealt: true,
+      dealAmount: 1680,
+      handler: '王顾问',
+      createdAt: now,
+      updatedAt: now,
+    },
+    {
+      id: generateId(),
+      customerName: '王五',
+      sourceType: '预约记录',
+      sourceId: appointments[0]?.id || '',
+      followUpDate: today,
+      followUpMethod: '到店',
+      feedback: '',
+      intentionLevel: '高意向',
+      isDealt: false,
+      nextFollowUpDate: dayAfterTomorrow,
+      handler: '李经理',
       createdAt: now,
       updatedAt: now,
     },

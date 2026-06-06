@@ -142,3 +142,70 @@ export const REPAIR_RESULT_COLORS: Record<RepairResult, string> = {
   已修好: 'bg-green-100 text-green-800',
   未修好: 'bg-red-100 text-red-800',
 };
+
+export type FollowUpStatus = '待回访' | '跟进中' | '已成交' | '已流失';
+
+export type FollowUpMethod = '电话' | '微信' | '到店' | '短信';
+
+export type IntentionLevel = '高意向' | '中意向' | '低意向' | '无意向';
+
+export type FollowUpSourceType = '试戴记录' | '预约记录';
+
+export interface FollowUpRecord {
+  id: string;
+  customerName: string;
+  sourceType: FollowUpSourceType;
+  sourceId: string;
+  followUpDate: string;
+  followUpMethod: FollowUpMethod;
+  feedback: string;
+  intentionLevel: IntentionLevel;
+  isDealt: boolean;
+  dealAmount?: number;
+  noDealReason?: string;
+  nextFollowUpDate?: string;
+  handler: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CustomerSummary {
+  customerName: string;
+  followUpStatus: FollowUpStatus;
+  intentionLevel?: IntentionLevel;
+  lastFollowUpDate?: string;
+  nextFollowUpDate?: string;
+  tryOnRecords: TryOnRecord[];
+  appointments: Appointment[];
+  repairs: RepairRecord[];
+  followUpRecords: FollowUpRecord[];
+}
+
+export const FOLLOW_UP_STATUS_LIST: FollowUpStatus[] = ['待回访', '跟进中', '已成交', '已流失'];
+
+export const FOLLOW_UP_METHOD_LIST: FollowUpMethod[] = ['电话', '微信', '到店', '短信'];
+
+export const INTENTION_LEVEL_LIST: IntentionLevel[] = ['高意向', '中意向', '低意向', '无意向'];
+
+export const FOLLOW_UP_SOURCE_TYPE_LIST: FollowUpSourceType[] = ['试戴记录', '预约记录'];
+
+export const FOLLOW_UP_STATUS_COLORS: Record<FollowUpStatus, string> = {
+  待回访: 'bg-yellow-100 text-yellow-800',
+  跟进中: 'bg-blue-100 text-blue-800',
+  已成交: 'bg-green-100 text-green-800',
+  已流失: 'bg-gray-100 text-gray-800',
+};
+
+export const FOLLOW_UP_METHOD_COLORS: Record<FollowUpMethod, string> = {
+  电话: 'bg-indigo-100 text-indigo-800',
+  微信: 'bg-green-100 text-green-800',
+  到店: 'bg-purple-100 text-purple-800',
+  短信: 'bg-cyan-100 text-cyan-800',
+};
+
+export const INTENTION_LEVEL_COLORS: Record<IntentionLevel, string> = {
+  高意向: 'bg-red-100 text-red-800',
+  中意向: 'bg-orange-100 text-orange-800',
+  低意向: 'bg-yellow-100 text-yellow-800',
+  无意向: 'bg-gray-100 text-gray-800',
+};
