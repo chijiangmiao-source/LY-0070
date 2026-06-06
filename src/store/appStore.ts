@@ -5,13 +5,15 @@ import {
   useStore,
   useVisibleTask$,
 } from '@builder.io/qwik';
-import type { GlassesFrame, TryOnRecord } from '~/types';
+import type { Appointment, GlassesFrame, TryOnRecord } from '~/types';
 import {
   generateId,
   getNow,
   getToday,
+  loadAppointments,
   loadFrames,
   loadRecords,
+  saveAppointments,
   saveFrames,
   saveRecords,
 } from '~/utils/storage';
@@ -19,17 +21,25 @@ import {
 export interface AppState {
   frames: GlassesFrame[];
   records: TryOnRecord[];
+  appointments: Appointment[];
   searchKeyword: string;
   filterType: string;
   filterInventory: string;
-  activeTab: 'frames' | 'records' | 'stats';
+  activeTab: 'frames' | 'records' | 'stats' | 'appointments';
   editingFrame: GlassesFrame | null;
   showFrameModal: boolean;
   showTryOnModal: boolean;
   showReturnModal: boolean;
+  showAppointmentModal: boolean;
   selectedFrameId: string | null;
   selectedRecordId: string | null;
+  selectedAppointmentId: string | null;
   pendingTryOnAfterEdit: boolean;
+  editingAppointment: Appointment | null;
+  appointmentSearchKeyword: string;
+  appointmentFilterDate: string;
+  appointmentFilterFrameNo: string;
+  appointmentFilterStatus: string;
 }
 
 export const AppContext = createContextId<AppState>('app-context');
@@ -42,6 +52,7 @@ export function createAppStore(): AppState {
   const store = useStore<AppState>({
     frames: [],
     records: [],
+    appointments: [],
     searchKeyword: '',
     filterType: '',
     filterInventory: '',
@@ -50,14 +61,22 @@ export function createAppStore(): AppState {
     showFrameModal: false,
     showTryOnModal: false,
     showReturnModal: false,
+    showAppointmentModal: false,
     selectedFrameId: null,
     selectedRecordId: null,
+    selectedAppointmentId: null,
     pendingTryOnAfterEdit: false,
+    editingAppointment: null,
+    appointmentSearchKeyword: '',
+    appointmentFilterDate: '',
+    appointmentFilterFrameNo: '',
+    appointmentFilterStatus: '',
   });
 
   useVisibleTask$(() => {
     store.frames = loadFrames();
     store.records = loadRecords();
+    store.appointments = loadAppointments();
   });
 
   useVisibleTask$(({ track }) => {
@@ -71,6 +90,13 @@ export function createAppStore(): AppState {
     track(() => store.records);
     if (store.records.length > 0) {
       saveRecords(store.records);
+    }
+  });
+
+  useVisibleTask$(({ track }) => {
+    track(() => store.appointments);
+    if (store.appointments.length > 0) {
+      saveAppointments(store.appointments);
     }
   });
 
@@ -184,6 +210,12 @@ export function getStats(store: AppState) {
   const disabled = store.frames.filter((f) => f.inventoryStatus === '停用').length;
   const totalRecords = store.records.length;
   const activeRecords = store.records.filter((r) => r.status === '进行中').length;
+  const today = getToday();
+  const todayAppointments = store.appointments.filter((a) => a.appointmentDate === today);
+  const todayAppointmentCount = todayAppointments.length;
+  const pendingArrival = todayAppointments.filter((a) => a.status === '预约中').length;
+  const totalAppointments = store.appointments.length;
+  const activeAppointments = store.appointments.filter((a) => a.status === '预约中').length;
   return {
     total,
     inStock,
@@ -192,5 +224,104 @@ export function getStats(store: AppState) {
     disabled,
     totalRecords,
     activeRecords,
+    todayAppointmentCount,
+    pendingArrival,
+    totalAppointments,
+    activeAppointments,
   };
+}
+
+export function addAppointment(
+  store: AppState,
+  appointment: Omit<Appointment, 'id' | 'createdAt' | 'updatedAt' | 'status'>
+): { success: boolean; error?: string } {
+  const conflict = store.appointments.some(
+    (a) =>
+      a.status === '预约中' &&
+      a.frameId === appointment.frameId &&
+      a.appointmentDate === appointment.appointmentDate &&
+      a.appointmentTime === appointment.appointmentTime
+  );
+  if (conflict) {
+    return { success: false, error: '该镜架在此时间段已有预约' };
+  }
+  const now = getNow();
+  store.appointments.push({
+    ...appointment,
+    id: generateId(),
+    status: '预约中',
+    createdAt: now,
+    updatedAt: now,
+  });
+  return { success: true };
+}
+
+export function updateAppointment(
+  store: AppState,
+  id: string,
+  updates: Partial<Omit<Appointment, 'id' | 'createdAt'>>
+): { success: boolean; error?: string } {
+  const index = store.appointments.findIndex((a) => a.id === id);
+  if (index === -1) return { success: false, error: '预约不存在' };
+  const current = store.appointments[index];
+  const newFrameId = updates.frameId ?? current.frameId;
+  const newDate = updates.appointmentDate ?? current.appointmentDate;
+  const newTime = updates.appointmentTime ?? current.appointmentTime;
+  const conflict = store.appointments.some(
+    (a) =>
+      a.id !== id &&
+      a.status === '预约中' &&
+      a.frameId === newFrameId &&
+      a.appointmentDate === newDate &&
+      a.appointmentTime === newTime
+  );
+  if (conflict) {
+    return { success: false, error: '该镜架在此时间段已有预约' };
+  }
+  store.appointments[index] = {
+    ...current,
+    ...updates,
+    updatedAt: getNow(),
+  };
+  return { success: true };
+}
+
+export function cancelAppointment(store: AppState, id: string): void {
+  const appointment = store.appointments.find((a) => a.id === id);
+  if (appointment) {
+    appointment.status = '已取消';
+    appointment.updatedAt = getNow();
+  }
+}
+
+export function markAppointmentArrived(store: AppState, id: string): void {
+  const appointment = store.appointments.find((a) => a.id === id);
+  if (appointment) {
+    appointment.status = '已到店';
+    appointment.updatedAt = getNow();
+  }
+}
+
+export function deleteAppointment(store: AppState, id: string): void {
+  store.appointments = store.appointments.filter((a) => a.id !== id);
+}
+
+export function getFilteredAppointments(store: AppState): Appointment[] {
+  return store.appointments.filter((a) => {
+    const matchKeyword =
+      !store.appointmentSearchKeyword ||
+      a.customerName.toLowerCase().includes(store.appointmentSearchKeyword.toLowerCase());
+    const matchDate = !store.appointmentFilterDate || a.appointmentDate === store.appointmentFilterDate;
+    const matchFrameNo =
+      !store.appointmentFilterFrameNo ||
+      a.frameNo.toLowerCase().includes(store.appointmentFilterFrameNo.toLowerCase());
+    const matchStatus = !store.appointmentFilterStatus || a.status === store.appointmentFilterStatus;
+    return matchKeyword && matchDate && matchFrameNo && matchStatus;
+  });
+}
+
+export function isFrameBooked(store: AppState, frameId: string): Appointment | undefined {
+  return store.appointments.find(
+    (a) => a.frameId === frameId && a.status === '预约中'
+  );
 }

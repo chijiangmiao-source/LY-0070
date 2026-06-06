@@ -60,3 +60,29 @@ export const TRY_ON_STATUS_COLORS: Record<TryOnStatus, string> = {
   空闲: 'bg-green-100 text-green-800',
   试戴中: 'bg-blue-100 text-blue-800',
 };
+
+export type AppointmentStatus = '预约中' | '已到店' | '已取消';
+
+export interface Appointment {
+  id: string;
+  frameId: string;
+  frameNo: string;
+  frameName: string;
+  customerName: string;
+  phone: string;
+  appointmentDate: string;
+  appointmentTime: string;
+  handler: string;
+  remark?: string;
+  status: AppointmentStatus;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export const APPOINTMENT_STATUS_LIST: AppointmentStatus[] = ['预约中', '已到店', '已取消'];
+
+export const APPOINTMENT_STATUS_COLORS: Record<AppointmentStatus, string> = {
+  预约中: 'bg-orange-100 text-orange-800',
+  已到店: 'bg-green-100 text-green-800',
+  已取消: 'bg-gray-100 text-gray-800',
+};

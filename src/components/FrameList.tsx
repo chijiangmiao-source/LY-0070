@@ -1,6 +1,6 @@
 import { component$ } from '@builder.io/qwik';
 import type { AppState } from '~/store/appStore';
-import { getFilteredFrames } from '~/store/appStore';
+import { getFilteredFrames, isFrameBooked } from '~/store/appStore';
 import {
   FRAME_TYPES,
   INVENTORY_STATUS_LIST,
@@ -107,77 +107,101 @@ export default component$<FrameListProps>(({ store }) => {
                   </td>
                 </tr>
               )}
-              {filteredFrames.map((frame) => (
-                <tr
-                  key={frame.id}
-                  class={
-                    frame.inventoryStatus === '待上架' ? 'pending-highlight bg-yellow-50' : 'hover:bg-gray-50'
-                  }
-                >
-                  <td class="table-cell font-mono font-medium">{frame.frameNo}</td>
-                  <td class="table-cell">
-                    <div class="flex items-center gap-2">
-                      {frame.inventoryStatus === '待上架' && (
-                        <span class="badge bg-yellow-400 text-yellow-900 animate-pulse">待上架</span>
-                      )}
-                      {frame.frameName}
-                    </div>
-                  </td>
-                  <td class="table-cell">{frame.frameType}</td>
-                  <td class="table-cell">{frame.brandSeries}</td>
-                  <td class="table-cell">{frame.location}</td>
-                  <td class="table-cell">
-                    <span class={`badge ${TRY_ON_STATUS_COLORS[frame.tryOnStatus]}`}>
-                      {frame.tryOnStatus}
-                    </span>
-                  </td>
-                  <td class="table-cell">
-                    <span class={`badge ${INVENTORY_STATUS_COLORS[frame.inventoryStatus]}`}>
-                      {frame.inventoryStatus}
-                    </span>
-                  </td>
-                  <td class="table-cell text-right whitespace-nowrap">
-                    <div class="flex justify-end gap-2">
-                      <button
-                        class="btn-primary text-xs py-1 px-3"
-                        onClick$={() => {
-                          store.editingFrame = frame;
-                          store.showFrameModal = true;
-                        }}
-                      >
-                        编辑
-                      </button>
-                      {frame.inventoryStatus === '在库' && (
+              {filteredFrames.map((frame) => {
+                const bookedApt = isFrameBooked(store, frame.id);
+                return (
+                  <tr
+                    key={frame.id}
+                    class={
+                      frame.inventoryStatus === '待上架'
+                        ? 'pending-highlight bg-yellow-50'
+                        : bookedApt
+                        ? 'bg-orange-50'
+                        : 'hover:bg-gray-50'
+                    }
+                  >
+                    <td class="table-cell font-mono font-medium">{frame.frameNo}</td>
+                    <td class="table-cell">
+                      <div class="flex items-center gap-2 flex-wrap">
+                        {frame.inventoryStatus === '待上架' && (
+                          <span class="badge bg-yellow-400 text-yellow-900 animate-pulse">待上架</span>
+                        )}
+                        {bookedApt && (
+                          <span class="badge bg-orange-400 text-orange-900">
+                            已预约 {bookedApt.appointmentDate} {bookedApt.appointmentTime}
+                          </span>
+                        )}
+                        <span>{frame.frameName}</span>
+                      </div>
+                    </td>
+                    <td class="table-cell">{frame.frameType}</td>
+                    <td class="table-cell">{frame.brandSeries}</td>
+                    <td class="table-cell">{frame.location}</td>
+                    <td class="table-cell">
+                      <span class={`badge ${TRY_ON_STATUS_COLORS[frame.tryOnStatus]}`}>
+                        {frame.tryOnStatus}
+                      </span>
+                    </td>
+                    <td class="table-cell">
+                      <span class={`badge ${INVENTORY_STATUS_COLORS[frame.inventoryStatus]}`}>
+                        {frame.inventoryStatus}
+                      </span>
+                    </td>
+                    <td class="table-cell text-right whitespace-nowrap">
+                      <div class="flex justify-end gap-2 flex-wrap">
                         <button
-                          class="btn-success text-xs py-1 px-3"
+                          class="btn-primary text-xs py-1 px-3"
                           onClick$={() => {
-                            store.selectedFrameId = frame.id;
-                            store.showTryOnModal = true;
+                            store.editingFrame = frame;
+                            store.showFrameModal = true;
                           }}
                         >
-                          试戴登记
+                          编辑
                         </button>
-                      )}
-                      {frame.inventoryStatus === '试戴中' && (
-                        <button
-                          class="btn-warning text-xs py-1 px-3"
-                          onClick$={() => {
-                            const record = store.records.find(
-                              (r) => r.frameId === frame.id && r.status === '进行中'
-                            );
-                            if (record) {
-                              store.selectedRecordId = record.id;
-                              store.showReturnModal = true;
-                            }
-                          }}
-                        >
-                          归还处理
-                        </button>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ))}
+                        {(frame.inventoryStatus === '在库' || frame.inventoryStatus === '待上架') && (
+                          <button
+                            class="btn-warning text-xs py-1 px-3"
+                            onClick$={() => {
+                              store.selectedFrameId = frame.id;
+                              store.editingAppointment = null;
+                              store.showAppointmentModal = true;
+                            }}
+                          >
+                            预约试戴
+                          </button>
+                        )}
+                        {frame.inventoryStatus === '在库' && (
+                          <button
+                            class="btn-success text-xs py-1 px-3"
+                            onClick$={() => {
+                              store.selectedFrameId = frame.id;
+                              store.showTryOnModal = true;
+                            }}
+                          >
+                            试戴登记
+                          </button>
+                        )}
+                        {frame.inventoryStatus === '试戴中' && (
+                          <button
+                            class="btn-warning text-xs py-1 px-3"
+                            onClick$={() => {
+                              const record = store.records.find(
+                                (r) => r.frameId === frame.id && r.status === '进行中'
+                              );
+                              if (record) {
+                                store.selectedRecordId = record.id;
+                                store.showReturnModal = true;
+                              }
+                            }}
+                          >
+                            归还处理
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>

@@ -1,7 +1,8 @@
-import type { GlassesFrame, TryOnRecord } from '~/types';
+import type { Appointment, GlassesFrame, TryOnRecord } from '~/types';
 
 const FRAMES_KEY = 'glasses_frames';
 const RECORDS_KEY = 'try_on_records';
+const APPOINTMENTS_KEY = 'appointments';
 
 export function generateId(): string {
   return Date.now().toString(36) + Math.random().toString(36).substr(2, 9);
@@ -141,6 +142,59 @@ function getDefaultRecords(): TryOnRecord[] {
       remark: '已决定购买同款',
       status: '已归还',
       createdAt: new Date(Date.now() - 86400000).toISOString(),
+    },
+  ];
+}
+
+export function loadAppointments(): Appointment[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const data = localStorage.getItem(APPOINTMENTS_KEY);
+    return data ? JSON.parse(data) : getDefaultAppointments();
+  } catch {
+    return getDefaultAppointments();
+  }
+}
+
+export function saveAppointments(appointments: Appointment[]): void {
+  if (typeof window === 'undefined') return;
+  localStorage.setItem(APPOINTMENTS_KEY, JSON.stringify(appointments));
+}
+
+function getDefaultAppointments(): Appointment[] {
+  const now = getNow();
+  const today = getToday();
+  const tomorrow = new Date(Date.now() + 86400000).toISOString().split('T')[0];
+  return [
+    {
+      id: generateId(),
+      frameId: '',
+      frameNo: 'F001',
+      frameName: '经典商务全框镜架',
+      customerName: '王五',
+      phone: '13800138001',
+      appointmentDate: today,
+      appointmentTime: '14:30',
+      handler: '李经理',
+      remark: '老客户，上次试戴后想再来看看',
+      status: '预约中',
+      createdAt: now,
+      updatedAt: now,
+    },
+    {
+      id: generateId(),
+      frameId: '',
+      frameNo: 'F004',
+      frameName: '复古圆框眼镜',
+      customerName: '赵六',
+      phone: '13900139002',
+      appointmentDate: tomorrow,
+      appointmentTime: '10:00',
+      handler: '王顾问',
+      remark: '',
+      status: '预约中',
+      createdAt: now,
+      updatedAt: now,
     },
   ];
 }

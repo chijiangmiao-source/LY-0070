@@ -6,6 +6,8 @@ import FrameFormModal from '~/components/FrameFormModal';
 import TryOnModal from '~/components/TryOnModal';
 import ReturnModal from '~/components/ReturnModal';
 import RecordList from '~/components/RecordList';
+import AppointmentList from '~/components/AppointmentList';
+import AppointmentModal from '~/components/AppointmentModal';
 
 export default component$(() => {
   const store = createAppStore();
@@ -17,7 +19,7 @@ export default component$(() => {
           <div class="flex items-center justify-between">
             <div>
               <h1 class="text-2xl font-bold text-gray-900">眼镜门店镜架试戴看板</h1>
-              <p class="text-sm text-gray-500 mt-1">管理镜架信息、试戴记录和库存状态</p>
+              <p class="text-sm text-gray-500 mt-1">管理镜架信息、试戴预约和库存状态</p>
             </div>
           </div>
         </div>
@@ -27,7 +29,7 @@ export default component$(() => {
         <StatsOverview store={store} />
 
         <div class="mt-6 border-b border-gray-200">
-          <nav class="-mb-px flex space-x-8">
+          <nav class="-mb-px flex flex-wrap gap-x-8 gap-y-2">
             <button
               onClick$={() => {
                 store.activeTab = 'frames';
@@ -39,6 +41,18 @@ export default component$(() => {
               }`}
             >
               镜架管理
+            </button>
+            <button
+              onClick$={() => {
+                store.activeTab = 'appointments';
+              }}
+              class={`py-2 px-1 border-b-2 font-medium text-sm ${
+                store.activeTab === 'appointments'
+                  ? 'border-primary text-primary'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              试戴预约
             </button>
             <button
               onClick$={() => {
@@ -57,6 +71,7 @@ export default component$(() => {
 
         <div class="mt-6">
           {store.activeTab === 'frames' && <FrameList store={store} />}
+          {store.activeTab === 'appointments' && <AppointmentList store={store} />}
           {store.activeTab === 'records' && <RecordList store={store} />}
         </div>
       </main>
@@ -64,6 +79,7 @@ export default component$(() => {
       {store.showFrameModal && <FrameFormModal store={store} />}
       {store.showTryOnModal && <TryOnModal store={store} />}
       {store.showReturnModal && <ReturnModal store={store} />}
+      {store.showAppointmentModal && <AppointmentModal store={store} />}
     </div>
   );
 });
