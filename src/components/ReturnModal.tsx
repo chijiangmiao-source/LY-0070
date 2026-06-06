@@ -79,7 +79,7 @@ export default component$<ReturnModalProps>(({ store }) => {
         }
       }}
     >
-      <div class="bg-white rounded-xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+      <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto border border-gray-200">
         <div class="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
           <h3 class="text-lg font-semibold text-gray-900">归还处理</h3>
           <button

@@ -2,7 +2,12 @@ import { component$, $ } from '@builder.io/qwik';
 import { useForm, zodForm$ } from '@modular-forms/qwik';
 import { z } from 'zod';
 import type { AppState } from '~/store/appStore';
-import { addFrame, isFrameNoDuplicate, updateFrame } from '~/store/appStore';
+import {
+  addFrame,
+  handleInventoryStatusChange,
+  isFrameNoDuplicate,
+  updateFrame,
+} from '~/store/appStore';
 import { FRAME_TYPES, INVENTORY_STATUS_LIST } from '~/types';
 
 interface FrameFormModalProps {
@@ -55,7 +60,22 @@ export default component$<FrameFormModalProps>(({ store }) => {
     const tryOnStatus =
       values.inventoryStatus === '试戴中' ? '试戴中' : ('空闲' as const);
 
+    let needTryOnRecord = false;
+    let targetFrameId: string | null = null;
+
     if (isEdit && editingFrame) {
+      const oldStatus = editingFrame.inventoryStatus;
+      const newStatus = values.inventoryStatus;
+
+      const result = handleInventoryStatusChange(
+        store,
+        editingFrame.id,
+        oldStatus,
+        newStatus
+      );
+      needTryOnRecord = result.needTryOnRecord;
+      targetFrameId = editingFrame.id;
+
       updateFrame(store, editingFrame.id, {
         ...values,
         frameNo: values.frameNo.trim(),
@@ -63,15 +83,25 @@ export default component$<FrameFormModalProps>(({ store }) => {
         tryOnStatus,
       });
     } else {
-      addFrame(store, {
+      const newFrame = {
         ...values,
         frameNo: values.frameNo.trim(),
         frameName: values.frameName.trim(),
         tryOnStatus,
-      });
+      };
+      addFrame(store, newFrame);
+      needTryOnRecord = values.inventoryStatus === '试戴中';
+      const addedFrame = store.frames[store.frames.length - 1];
+      targetFrameId = addedFrame?.id || null;
     }
+
     store.showFrameModal = false;
     store.editingFrame = null;
+
+    if (needTryOnRecord && targetFrameId) {
+      store.selectedFrameId = targetFrameId;
+      store.showTryOnModal = true;
+    }
   });
 
   return (
@@ -84,7 +114,7 @@ export default component$<FrameFormModalProps>(({ store }) => {
         }
       }}
     >
-      <div class="bg-white rounded-xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+      <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto border border-gray-200">
         <div class="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
           <h3 class="text-lg font-semibold text-gray-900">
             {isEdit ? '编辑镜架' : '新增镜架'}

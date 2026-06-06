@@ -9,6 +9,7 @@ import type { GlassesFrame, TryOnRecord } from '~/types';
 import {
   generateId,
   getNow,
+  getToday,
   loadFrames,
   loadRecords,
   saveFrames,
@@ -28,6 +29,7 @@ export interface AppState {
   showReturnModal: boolean;
   selectedFrameId: string | null;
   selectedRecordId: string | null;
+  pendingTryOnAfterEdit: boolean;
 }
 
 export const AppContext = createContextId<AppState>('app-context');
@@ -50,6 +52,7 @@ export function createAppStore(): AppState {
     showReturnModal: false,
     selectedFrameId: null,
     selectedRecordId: null,
+    pendingTryOnAfterEdit: false,
   });
 
   useVisibleTask$(() => {
@@ -148,6 +151,29 @@ export function getFilteredFrames(store: AppState): GlassesFrame[] {
     const matchInventory = !store.filterInventory || frame.inventoryStatus === store.filterInventory;
     return matchKeyword && matchType && matchInventory;
   });
+}
+
+export function handleInventoryStatusChange(
+  store: AppState,
+  frameId: string,
+  oldStatus: string,
+  newStatus: string
+): { needTryOnRecord: boolean } {
+  const needTryOnRecord = oldStatus !== '试戴中' && newStatus === '试戴中';
+  const wasTryOn = oldStatus === '试戴中' && newStatus !== '试戴中';
+
+  if (wasTryOn) {
+    const activeRecords = store.records.filter(
+      (r) => r.frameId === frameId && r.status === '进行中'
+    );
+    const today = getToday();
+    activeRecords.forEach((record) => {
+      record.returnDate = today;
+      record.status = '已归还';
+    });
+  }
+
+  return { needTryOnRecord };
 }
 
 export function getStats(store: AppState) {
