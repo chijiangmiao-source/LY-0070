@@ -1,8 +1,9 @@
-import type { Appointment, GlassesFrame, TryOnRecord } from '~/types';
+import type { Appointment, GlassesFrame, RepairRecord, TryOnRecord } from '~/types';
 
 const FRAMES_KEY = 'glasses_frames';
 const RECORDS_KEY = 'try_on_records';
 const APPOINTMENTS_KEY = 'appointments';
+const REPAIRS_KEY = 'repair_records';
 const INITIALIZED_KEY = 'storage_initialized';
 
 export function generateId(): string {
@@ -216,6 +217,72 @@ function getDefaultAppointments(): Appointment[] {
       handler: '王顾问',
       remark: '',
       status: '预约中',
+      createdAt: now,
+      updatedAt: now,
+    },
+  ];
+}
+
+export function loadRepairs(): RepairRecord[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const data = localStorage.getItem(REPAIRS_KEY);
+    if (data) return JSON.parse(data);
+    if (isFirstLoad()) return getDefaultRepairs();
+    return [];
+  } catch {
+    return isFirstLoad() ? getDefaultRepairs() : [];
+  }
+}
+
+export function saveRepairs(repairs: RepairRecord[]): void {
+  if (typeof window === 'undefined') return;
+  markInitialized();
+  localStorage.setItem(REPAIRS_KEY, JSON.stringify(repairs));
+}
+
+export function generateRepairNo(): string {
+  const now = new Date();
+  const dateStr = now.toISOString().slice(0, 10).replace(/-/g, '');
+  const random = Math.floor(Math.random() * 10000).toString().padStart(4, '0');
+  return `WX${dateStr}${random}`;
+}
+
+function getDefaultRepairs(): RepairRecord[] {
+  const frames = getDefaultFrames();
+  const f002 = frames.find((f) => f.frameNo === 'F002');
+  const f005 = frames.find((f) => f.frameNo === 'F005');
+  const now = getNow();
+  const today = getToday();
+  const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
+  const nextWeek = new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0];
+  return [
+    {
+      id: generateId(),
+      repairNo: generateRepairNo(),
+      frameId: f002?.id || '',
+      frameNo: 'F002',
+      frameName: '时尚半框钛架',
+      sendDate: yesterday,
+      expectedDate: nextWeek,
+      repairType: '送修',
+      status: '维修中',
+      handler: '李经理',
+      remark: '镜框断裂，需要焊接修复',
+      createdAt: now,
+      updatedAt: now,
+    },
+    {
+      id: generateId(),
+      repairNo: generateRepairNo(),
+      frameId: f005?.id || '',
+      frameNo: 'F005',
+      frameName: '儿童防蓝光镜架',
+      sendDate: today,
+      repairType: '保养',
+      status: '待送修',
+      handler: '王顾问',
+      remark: '定期保养清洁，更换鼻托',
       createdAt: now,
       updatedAt: now,
     },

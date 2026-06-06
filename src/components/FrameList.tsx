@@ -1,6 +1,10 @@
 import { component$ } from '@builder.io/qwik';
 import type { AppState } from '~/store/appStore';
-import { getFilteredFrames, getFrameAppointmentDisplay } from '~/store/appStore';
+import {
+  getFilteredFrames,
+  getFrameAppointmentDisplay,
+  getFrameRepairDisplay,
+} from '~/store/appStore';
 import {
   FRAME_TYPES,
   INVENTORY_STATUS_LIST,
@@ -12,6 +16,11 @@ const APPOINTMENT_DISPLAY_COLORS: Record<string, string> = {
   无预约: 'bg-gray-100 text-gray-600',
   已预约: 'bg-orange-100 text-orange-800',
   今日待到店: 'bg-pink-100 text-pink-800',
+};
+
+const REPAIR_DISPLAY_COLORS: Record<string, string> = {
+  无维修: 'bg-gray-100 text-gray-600',
+  维修中: 'bg-purple-100 text-purple-800',
 };
 
 interface FrameListProps {
@@ -103,6 +112,9 @@ export default component$<FrameListProps>(({ store }) => {
                 <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   预约状态
                 </th>
+                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  维修状态
+                </th>
                 <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                   操作
                 </th>
@@ -111,19 +123,22 @@ export default component$<FrameListProps>(({ store }) => {
             <tbody class="bg-white divide-y divide-gray-200">
               {filteredFrames.length === 0 && (
                 <tr>
-                  <td colSpan={9} class="px-4 py-8 text-center text-gray-500">
+                  <td colSpan={10} class="px-4 py-8 text-center text-gray-500">
                     暂无镜架数据
                   </td>
                 </tr>
               )}
               {filteredFrames.map((frame) => {
                 const aptDisplay = getFrameAppointmentDisplay(frame);
+                const repairDisplay = getFrameRepairDisplay(store, frame.id);
                 return (
                   <tr
                     key={frame.id}
                     class={
                       frame.inventoryStatus === '待上架'
                         ? 'pending-highlight bg-yellow-50'
+                        : repairDisplay.status === '维修中'
+                        ? 'bg-purple-50'
                         : aptDisplay.status === '今日待到店'
                         ? 'bg-pink-50'
                         : aptDisplay.status === '已预约'
@@ -158,6 +173,11 @@ export default component$<FrameListProps>(({ store }) => {
                         {aptDisplay.label}
                       </span>
                     </td>
+                    <td class="table-cell">
+                      <span class={`badge ${REPAIR_DISPLAY_COLORS[repairDisplay.status]}`}>
+                        {repairDisplay.label}
+                      </span>
+                    </td>
                     <td class="table-cell text-right whitespace-nowrap">
                       <div class="flex justify-end gap-2 flex-wrap">
                         <button
@@ -169,30 +189,34 @@ export default component$<FrameListProps>(({ store }) => {
                         >
                           编辑
                         </button>
-                        {(frame.inventoryStatus === '在库' ||
-                          frame.inventoryStatus === '待上架' ||
-                          frame.inventoryStatus === '已预约') && (
-                          <button
-                            class="btn-warning text-xs py-1 px-3"
-                            onClick$={() => {
-                              store.selectedFrameId = frame.id;
-                              store.editingAppointment = null;
-                              store.showAppointmentModal = true;
-                            }}
-                          >
-                            预约试戴
-                          </button>
-                        )}
-                        {frame.inventoryStatus === '在库' && (
-                          <button
-                            class="btn-success text-xs py-1 px-3"
-                            onClick$={() => {
-                              store.selectedFrameId = frame.id;
-                              store.showTryOnModal = true;
-                            }}
-                          >
-                            试戴登记
-                          </button>
+                        {repairDisplay.status !== '维修中' && (
+                          <>
+                            {(frame.inventoryStatus === '在库' ||
+                              frame.inventoryStatus === '待上架' ||
+                              frame.inventoryStatus === '已预约') && (
+                              <button
+                                class="btn-warning text-xs py-1 px-3"
+                                onClick$={() => {
+                                  store.selectedFrameId = frame.id;
+                                  store.editingAppointment = null;
+                                  store.showAppointmentModal = true;
+                                }}
+                              >
+                                预约试戴
+                              </button>
+                            )}
+                            {frame.inventoryStatus === '在库' && (
+                              <button
+                                class="btn-success text-xs py-1 px-3"
+                                onClick$={() => {
+                                  store.selectedFrameId = frame.id;
+                                  store.showTryOnModal = true;
+                                }}
+                              >
+                                试戴登记
+                              </button>
+                            )}
+                          </>
                         )}
                         {frame.inventoryStatus === '试戴中' && (
                           <button
@@ -210,6 +234,20 @@ export default component$<FrameListProps>(({ store }) => {
                             归还处理
                           </button>
                         )}
+                        {repairDisplay.status !== '维修中' &&
+                          frame.inventoryStatus !== '试戴中' &&
+                          frame.inventoryStatus !== '停用' && (
+                            <button
+                              class="btn-secondary text-xs py-1 px-3"
+                              onClick$={() => {
+                                store.selectedFrameId = frame.id;
+                                store.editingRepair = null;
+                                store.showRepairModal = true;
+                              }}
+                            >
+                              维修登记
+                            </button>
+                          )}
                       </div>
                     </td>
                   </tr>

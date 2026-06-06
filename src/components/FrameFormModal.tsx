@@ -26,7 +26,7 @@ const frameSchema = z.object({
   frameType: z.string().min(1, '请选择镜架类型'),
   brandSeries: z.string().min(1, '品牌系列不能为空'),
   location: z.string().min(1, '存放位置不能为空'),
-  inventoryStatus: z.enum(['在库', '试戴中', '待上架', '停用', '已预约']),
+  inventoryStatus: z.enum(['在库', '试戴中', '待上架', '停用', '已预约', '维修中']),
 });
 
 type FrameFormValues = z.infer<typeof frameSchema>;

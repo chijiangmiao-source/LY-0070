@@ -58,10 +58,34 @@ export default component$<StatsOverviewProps>(({ store }) => {
       icon: '⏰',
       iconColor: 'text-pink-600',
     },
+    {
+      label: '维修中',
+      value: stats.inRepair,
+      gradient: 'from-purple-500 to-purple-600',
+      iconBg: 'bg-purple-100',
+      icon: '🔧',
+      iconColor: 'text-purple-600',
+    },
+    {
+      label: '待返库',
+      value: stats.pendingReturn,
+      gradient: 'from-indigo-500 to-indigo-600',
+      iconBg: 'bg-indigo-100',
+      icon: '📦',
+      iconColor: 'text-indigo-600',
+    },
+    {
+      label: '本月维修次数',
+      value: stats.thisMonthRepairs,
+      gradient: 'from-rose-500 to-rose-600',
+      iconBg: 'bg-rose-100',
+      icon: '📊',
+      iconColor: 'text-rose-600',
+    },
   ];
 
   return (
-    <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-5">
+    <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 xl:grid-cols-9 gap-5">
       {statCards.map((card) => (
         <div
           key={card.label}

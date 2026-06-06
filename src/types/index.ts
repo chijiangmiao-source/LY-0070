@@ -1,4 +1,4 @@
-export type InventoryStatus = '在库' | '试戴中' | '待上架' | '停用' | '已预约';
+export type InventoryStatus = '在库' | '试戴中' | '待上架' | '停用' | '已预约' | '维修中';
 
 export type TryOnStatus = '空闲' | '试戴中';
 
@@ -51,6 +51,7 @@ export const INVENTORY_STATUS_LIST: InventoryStatus[] = [
   '待上架',
   '停用',
   '已预约',
+  '维修中',
 ];
 
 export const TRY_ON_STATUS_LIST: TryOnStatus[] = ['空闲', '试戴中'];
@@ -61,6 +62,7 @@ export const INVENTORY_STATUS_COLORS: Record<InventoryStatus, string> = {
   待上架: 'bg-yellow-100 text-yellow-800',
   停用: 'bg-gray-100 text-gray-800',
   已预约: 'bg-orange-100 text-orange-800',
+  维修中: 'bg-purple-100 text-purple-800',
 };
 
 export const TRY_ON_STATUS_COLORS: Record<TryOnStatus, string> = {
@@ -92,4 +94,42 @@ export const APPOINTMENT_STATUS_COLORS: Record<AppointmentStatus, string> = {
   预约中: 'bg-orange-100 text-orange-800',
   已到店: 'bg-green-100 text-green-800',
   已取消: 'bg-gray-100 text-gray-800',
+};
+
+export type RepairStatus = '待送修' | '维修中' | '待返库' | '已完成';
+
+export type RepairType = '送修' | '保养' | '返库';
+
+export interface RepairRecord {
+  id: string;
+  repairNo: string;
+  frameId: string;
+  frameNo: string;
+  frameName: string;
+  sendDate: string;
+  expectedDate?: string;
+  actualDate?: string;
+  repairType: RepairType;
+  status: RepairStatus;
+  handler: string;
+  remark?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export const REPAIR_STATUS_LIST: RepairStatus[] = ['待送修', '维修中', '待返库', '已完成'];
+
+export const REPAIR_TYPE_LIST: RepairType[] = ['送修', '保养', '返库'];
+
+export const REPAIR_STATUS_COLORS: Record<RepairStatus, string> = {
+  待送修: 'bg-yellow-100 text-yellow-800',
+  维修中: 'bg-blue-100 text-blue-800',
+  待返库: 'bg-purple-100 text-purple-800',
+  已完成: 'bg-green-100 text-green-800',
+};
+
+export const REPAIR_TYPE_COLORS: Record<RepairType, string> = {
+  送修: 'bg-red-100 text-red-800',
+  保养: 'bg-cyan-100 text-cyan-800',
+  返库: 'bg-indigo-100 text-indigo-800',
 };

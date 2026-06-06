@@ -5,41 +5,54 @@ import {
   useStore,
   useVisibleTask$,
 } from '@builder.io/qwik';
-import type { Appointment, GlassesFrame, TryOnRecord } from '~/types';
+import type { Appointment, GlassesFrame, RepairRecord, RepairStatus, TryOnRecord } from '~/types';
 import {
   generateId,
+  generateRepairNo,
   getNow,
   getToday,
   loadAppointments,
   loadFrames,
   loadRecords,
+  loadRepairs,
   saveAppointments,
   saveFrames,
   saveRecords,
+  saveRepairs,
 } from '~/utils/storage';
 
 export interface AppState {
   frames: GlassesFrame[];
   records: TryOnRecord[];
   appointments: Appointment[];
+  repairs: RepairRecord[];
   searchKeyword: string;
   filterType: string;
   filterInventory: string;
-  activeTab: 'frames' | 'records' | 'stats' | 'appointments';
+  activeTab: 'frames' | 'records' | 'stats' | 'appointments' | 'repairs';
   editingFrame: GlassesFrame | null;
   showFrameModal: boolean;
   showTryOnModal: boolean;
   showReturnModal: boolean;
   showAppointmentModal: boolean;
+  showRepairModal: boolean;
   selectedFrameId: string | null;
   selectedRecordId: string | null;
   selectedAppointmentId: string | null;
+  selectedRepairId: string | null;
   pendingTryOnAfterEdit: boolean;
   editingAppointment: Appointment | null;
+  editingRepair: RepairRecord | null;
   appointmentSearchKeyword: string;
   appointmentFilterDate: string;
   appointmentFilterFrameNo: string;
   appointmentFilterStatus: string;
+  repairSearchKeyword: string;
+  repairFilterDateFrom: string;
+  repairFilterDateTo: string;
+  repairFilterFrameNo: string;
+  repairFilterStatus: string;
+  repairFilterHandler: string;
 }
 
 export const AppContext = createContextId<AppState>('app-context');
@@ -53,6 +66,7 @@ export function createAppStore(): AppState {
     frames: [],
     records: [],
     appointments: [],
+    repairs: [],
     searchKeyword: '',
     filterType: '',
     filterInventory: '',
@@ -62,23 +76,35 @@ export function createAppStore(): AppState {
     showTryOnModal: false,
     showReturnModal: false,
     showAppointmentModal: false,
+    showRepairModal: false,
     selectedFrameId: null,
     selectedRecordId: null,
     selectedAppointmentId: null,
+    selectedRepairId: null,
     pendingTryOnAfterEdit: false,
     editingAppointment: null,
+    editingRepair: null,
     appointmentSearchKeyword: '',
     appointmentFilterDate: '',
     appointmentFilterFrameNo: '',
     appointmentFilterStatus: '',
+    repairSearchKeyword: '',
+    repairFilterDateFrom: '',
+    repairFilterDateTo: '',
+    repairFilterFrameNo: '',
+    repairFilterStatus: '',
+    repairFilterHandler: '',
   });
 
   useVisibleTask$(() => {
     store.frames = loadFrames();
     store.records = loadRecords();
     store.appointments = loadAppointments();
+    store.repairs = loadRepairs();
     syncAppointmentFrameIds(store);
     syncFramesAppointmentStatus(store);
+    syncFramesRepairStatus(store);
+    syncRepairFrameIds(store);
   });
 
   useVisibleTask$(({ track }) => {
@@ -95,6 +121,12 @@ export function createAppStore(): AppState {
     track(() => store.appointments);
     saveAppointments(store.appointments);
     syncFramesAppointmentStatus(store);
+  });
+
+  useVisibleTask$(({ track }) => {
+    track(() => store.repairs);
+    saveRepairs(store.repairs);
+    syncFramesRepairStatus(store);
   });
 
   useContextProvider(AppContext, store);
@@ -185,6 +217,7 @@ export function handleInventoryStatusChange(
   const needTryOnRecord = oldStatus !== '试戴中' && newStatus === '试戴中';
   const wasTryOn = oldStatus === '试戴中' && newStatus !== '试戴中';
   const wasAppointment = oldStatus === '已预约' && newStatus !== '已预约';
+  const wasRepair = oldStatus === '维修中' && newStatus !== '维修中';
 
   if (wasTryOn) {
     const activeRecords = store.records.filter(
@@ -211,6 +244,17 @@ export function handleInventoryStatusChange(
     }
   }
 
+  if (wasRepair) {
+    const activeRepairs = store.repairs.filter(
+      (r) => r.frameId === frameId && r.status !== '已完成'
+    );
+    activeRepairs.forEach((repair) => {
+      repair.status = '已完成';
+      repair.actualDate = getToday();
+      repair.updatedAt = getNow();
+    });
+  }
+
   return { needTryOnRecord };
 }
 
@@ -228,6 +272,10 @@ export function getStats(store: AppState) {
   const pendingArrival = todayAppointments.filter((a) => a.status === '预约中').length;
   const totalAppointments = store.appointments.length;
   const activeAppointments = store.appointments.filter((a) => a.status === '预约中').length;
+  const inRepair = store.repairs.filter((r) => r.status === '维修中').length;
+  const pendingReturn = store.repairs.filter((r) => r.status === '待返库').length;
+  const thisMonth = new Date().toISOString().slice(0, 7);
+  const thisMonthRepairs = store.repairs.filter((r) => r.sendDate.startsWith(thisMonth)).length;
   return {
     total,
     inStock,
@@ -240,6 +288,9 @@ export function getStats(store: AppState) {
     pendingArrival,
     totalAppointments,
     activeAppointments,
+    inRepair,
+    pendingReturn,
+    thisMonthRepairs,
   };
 }
 
@@ -403,6 +454,159 @@ export function syncAppointmentFrameIds(store: AppState): void {
         const byNo = store.frames.find((f) => f.frameNo === apt.frameNo);
         if (byNo) {
           apt.frameId = byNo.id;
+        }
+      }
+    }
+  });
+}
+
+export interface FrameRepairDisplay {
+  status: '无维修' | '维修中';
+  label: string;
+  repairNo?: string;
+  repairStatus?: RepairStatus;
+  expectedDate?: string;
+}
+
+export function getFrameRepairDisplay(store: AppState, frameId: string): FrameRepairDisplay {
+  const activeRepair = store.repairs.find(
+    (r) => r.frameId === frameId && r.status !== '已完成'
+  );
+  if (!activeRepair) {
+    return { status: '无维修', label: '无维修' };
+  }
+  return {
+    status: '维修中',
+    label: `${activeRepair.status}（单号：${activeRepair.repairNo}）`,
+    repairNo: activeRepair.repairNo,
+    repairStatus: activeRepair.status,
+    expectedDate: activeRepair.expectedDate,
+  };
+}
+
+export function isFrameInRepair(store: AppState, frameId: string): boolean {
+  return store.repairs.some((r) => r.frameId === frameId && r.status !== '已完成');
+}
+
+export function addRepairRecord(
+  store: AppState,
+  data: Omit<RepairRecord, 'id' | 'repairNo' | 'createdAt' | 'updatedAt' | 'status'> & {
+    status?: RepairStatus;
+  }
+): { success: boolean; error?: string } {
+  const frame = store.frames.find((f) => f.id === data.frameId);
+  if (!frame) {
+    return { success: false, error: '未找到镜架信息' };
+  }
+  const now = getNow();
+  store.repairs.push({
+    ...data,
+    id: generateId(),
+    repairNo: generateRepairNo(),
+    frameNo: frame.frameNo,
+    frameName: frame.frameName,
+    status: data.status || '待送修',
+    createdAt: now,
+    updatedAt: now,
+  });
+  return { success: true };
+}
+
+export function updateRepairRecord(
+  store: AppState,
+  id: string,
+  updates: Partial<Omit<RepairRecord, 'id' | 'createdAt'>>
+): { success: boolean; error?: string } {
+  const index = store.repairs.findIndex((r) => r.id === id);
+  if (index === -1) return { success: false, error: '维修记录不存在' };
+  store.repairs[index] = {
+    ...store.repairs[index],
+    ...updates,
+    updatedAt: getNow(),
+  };
+  return { success: true };
+}
+
+export function updateRepairStatus(
+  store: AppState,
+  id: string,
+  newStatus: RepairStatus
+): { success: boolean; error?: string } {
+  const repair = store.repairs.find((r) => r.id === id);
+  if (!repair) return { success: false, error: '维修记录不存在' };
+  repair.status = newStatus;
+  repair.updatedAt = getNow();
+  if (newStatus === '已完成') {
+    repair.actualDate = getToday();
+  }
+  return { success: true };
+}
+
+export function deleteRepairRecord(store: AppState, id: string): void {
+  store.repairs = store.repairs.filter((r) => r.id !== id);
+}
+
+export function getFilteredRepairs(store: AppState): RepairRecord[] {
+  return store.repairs.filter((r) => {
+    const matchKeyword =
+      !store.repairSearchKeyword ||
+      r.repairNo.toLowerCase().includes(store.repairSearchKeyword.toLowerCase()) ||
+      r.frameNo.toLowerCase().includes(store.repairSearchKeyword.toLowerCase()) ||
+      r.frameName.toLowerCase().includes(store.repairSearchKeyword.toLowerCase());
+    const matchDateFrom =
+      !store.repairFilterDateFrom || r.sendDate >= store.repairFilterDateFrom;
+    const matchDateTo = !store.repairFilterDateTo || r.sendDate <= store.repairFilterDateTo;
+    const matchFrameNo =
+      !store.repairFilterFrameNo ||
+      r.frameNo.toLowerCase().includes(store.repairFilterFrameNo.toLowerCase());
+    const matchStatus = !store.repairFilterStatus || r.status === store.repairFilterStatus;
+    const matchHandler =
+      !store.repairFilterHandler ||
+      r.handler.toLowerCase().includes(store.repairFilterHandler.toLowerCase());
+    return (
+      matchKeyword &&
+      matchDateFrom &&
+      matchDateTo &&
+      matchFrameNo &&
+      matchStatus &&
+      matchHandler
+    );
+  });
+}
+
+export function syncFramesRepairStatus(store: AppState): void {
+  store.frames.forEach((frame) => {
+    const activeRepair = store.repairs.find(
+      (r) => r.frameId === frame.id && r.status !== '已完成'
+    );
+    if (activeRepair) {
+      if (
+        frame.inventoryStatus !== '试戴中' &&
+        frame.inventoryStatus !== '停用'
+      ) {
+        frame.inventoryStatus = '维修中';
+      }
+    } else {
+      if (frame.inventoryStatus === '维修中') {
+        frame.inventoryStatus = '在库';
+      }
+    }
+  });
+}
+
+export function syncRepairFrameIds(store: AppState): void {
+  store.repairs.forEach((repair) => {
+    if (!repair.frameId) {
+      const matched = store.frames.find((f) => f.frameNo === repair.frameNo);
+      if (matched) {
+        repair.frameId = matched.id;
+      }
+    } else {
+      const matched = store.frames.find((f) => f.id === repair.frameId);
+      if (!matched) {
+        const byNo = store.frames.find((f) => f.frameNo === repair.frameNo);
+        if (byNo) {
+          repair.frameId = byNo.id;
         }
       }
     }

@@ -8,6 +8,8 @@ import ReturnModal from '~/components/ReturnModal';
 import RecordList from '~/components/RecordList';
 import AppointmentList from '~/components/AppointmentList';
 import AppointmentModal from '~/components/AppointmentModal';
+import RepairList from '~/components/RepairList';
+import RepairModal from '~/components/RepairModal';
 
 export default component$(() => {
   const store = createAppStore();
@@ -66,6 +68,18 @@ export default component$(() => {
             >
               试戴记录
             </button>
+            <button
+              onClick$={() => {
+                store.activeTab = 'repairs';
+              }}
+              class={`py-2 px-1 border-b-2 font-medium text-sm ${
+                store.activeTab === 'repairs'
+                  ? 'border-primary text-primary'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              镜架保养与维修
+            </button>
           </nav>
         </div>
 
@@ -73,6 +87,7 @@ export default component$(() => {
           {store.activeTab === 'frames' && <FrameList store={store} />}
           {store.activeTab === 'appointments' && <AppointmentList store={store} />}
           {store.activeTab === 'records' && <RecordList store={store} />}
+          {store.activeTab === 'repairs' && <RepairList store={store} />}
         </div>
       </main>
 
@@ -80,6 +95,7 @@ export default component$(() => {
       {store.showTryOnModal && <TryOnModal store={store} />}
       {store.showReturnModal && <ReturnModal store={store} />}
       {store.showAppointmentModal && <AppointmentModal store={store} />}
+      {store.showRepairModal && <RepairModal store={store} />}
     </div>
   );
 });
